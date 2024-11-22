@@ -1,42 +1,27 @@
-# config.py - Configuration settings
-MORNINGSTAR_URL = "https://www.morningstar.com/stocks/{ticker}/financials"
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Base configuration
+BASE_URL = "https://www.morningstar.com/stocks"
+DEFAULT_DELAY = 2
+MAX_RETRIES = 3
+
+# Request headers
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Connection': 'keep-alive',
 }
-DELAY_BETWEEN_REQUESTS = 2  # seconds
 
-# scraper.py - Main scraping functionality
-from bs4 import BeautifulSoup
-import requests
-from .config import *
-from .logger import setup_logger
+# File paths
+INPUT_DIR = 'data/input'
+OUTPUT_DIR = 'data/output'
+DEFAULT_INPUT_FILE = os.path.join(INPUT_DIR, 'tickers.csv')
 
-class MorningstarScraper:
-    def __init__(self):
-        self.logger = setup_logger()
-    
-    def scrape_ticker(self, ticker):
-        # Scraping logic here
-        pass
-
-# utils.py - Helper functions
-import pandas as pd
-from datetime import datetime
-
-def load_tickers(filepath):
-    return pd.read_csv(filepath)
-
-def save_results(data, filename=None):
-    if filename is None:
-        filename = f'data/output/results_{datetime.now():%Y%m%d_%H%M%S}.csv'
-    pd.DataFrame(data).to_csv(filename, index=False)
-
-# logger.py - Logging configuration
-import logging
-
-def setup_logger():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
-    return logging.getLogger(__name__)
+# Logging configuration
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+LOG_LEVEL = 'INFO'

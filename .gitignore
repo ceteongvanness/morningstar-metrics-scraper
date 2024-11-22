@@ -9,12 +9,10 @@ venv/
 data/output/*
 !data/output/.gitkeep
 
-# Notebooks
-.ipynb_checkpoints
-
 # IDE
 .vscode/
 .idea/
 
 # OS
 .DS_Store
+Thumbs.db

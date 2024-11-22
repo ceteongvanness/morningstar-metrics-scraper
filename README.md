@@ -224,10 +224,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 This tool is for educational and research purposes only. Please review and comply with Morningstar's terms of service before use. Ensure you have the right to access and use the data you're collecting.
 
-## Contact
-
-Project Link: [https://github.com/yourusername/morningstar-metrics-scraper](https://github.com/yourusername/morningstar-metrics-scraper)
-
 ## Acknowledgments
 
 - Beautiful Soup documentation

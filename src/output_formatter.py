@@ -1,103 +1,129 @@
 import pandas as pd
 from datetime import datetime
+import os
 
-class StockAnalysisOutput:
+class OutputFormatter:
     def __init__(self):
-        self.columns = {
-            'stock_code': '股票代碼',
-            'current_price': '現在股價',
-            'total_score': '總評分',
-            'financial_score': '財報評分',
-            'moat_score': '護城河評分',
-            'risk_deduction': '風險扣分',
-            'target_yield_price': '目標殖利率 估價法',
-            'relative_pb_price': '相對 P/B 估價法',
-            'peg_price': 'PEG 成長股 估價法',
-            'dividend_ttm': '該公司 股息(TTM)',
-            'yield_5yr_avg': '該公司近5年 平均殖利率',
-            'bvps_ttm': '該公司 BVPS(TTM)',
-            'pb_5yr_avg': '該公司近5年 平均P/B',
-            'eps_ttm': '該公司 EPS(TTM)',
-            'eps_growth': '該公司 EPS成長率％'
-        }
+        self.columns = [
+            '股票代碼',               # Stock code
+            '現在股價',               # Current price
+            '目標殖利率 估價法',        # Target yield valuation
+            '相對 P/B 估價法',         # Relative P/B valuation
+            'PEG 成長股 估價法',       # PEG growth valuation
+            '該公司 股息(TTM)',        # Company dividend TTM
+            '該公司近5年 平均殖利率',    # 5-year average yield
+            '該公司 BVPS(TTM)',       # Company BVPS TTM
+            '該公司近5年 平均P/B',      # 5-year average P/B
+            '該公司 EPS(TTM)',        # Company EPS TTM
+            '該公司 EPS成長率％'        # Company EPS growth rate
+        ]
 
-    def generate_output(self, stock_data, score_results):
+    def format_output(self, data_list):
         """
-        Generate formatted output DataFrame
+        Format the scraped data into a DataFrame with required columns
         """
-        try:
-            data = {
-                self.columns['stock_code']: [stock_data.get('stock_code', '')],
-                self.columns['current_price']: [stock_data.get('current_price', 0)],
-                self.columns['total_score']: [score_results.get('final_score', 0)],
-                self.columns['financial_score']: [score_results.get('financial_total', 0)],
-                self.columns['moat_score']: [score_results.get('moat_total', 0)],
-                self.columns['risk_deduction']: [score_results.get('risk_total', 0)],
-                
-                # Valuation metrics
-                self.columns['target_yield_price']: [self._calculate_target_yield_price(stock_data)],
-                self.columns['relative_pb_price']: [self._calculate_relative_pb_price(stock_data)],
-                self.columns['peg_price']: [self._calculate_peg_price(stock_data)],
-                
-                # Raw metrics
-                self.columns['dividend_ttm']: [stock_data.get('dividend_ttm', 0)],
-                self.columns['yield_5yr_avg']: [stock_data.get('yield_5yr_avg', 0)],
-                self.columns['bvps_ttm']: [stock_data.get('bvps_ttm', 0)],
-                self.columns['pb_5yr_avg']: [stock_data.get('pb_5yr_avg', 0)],
-                self.columns['eps_ttm']: [stock_data.get('eps_ttm', 0)],
-                self.columns['eps_growth']: [stock_data.get('eps_growth', 0)]
+        formatted_data = []
+        
+        for data in data_list:
+            # Calculate valuations
+            target_yield = self._calculate_target_yield(
+                data.get('dividend_ttm', 0),
+                data.get('yield_5yr_avg', 0)
+            )
+            
+            relative_pb = self._calculate_relative_pb(
+                data.get('bvps_ttm', 0),
+                data.get('pb_5yr_avg', 0)
+            )
+            
+            peg_valuation = self._calculate_peg(
+                data.get('eps_ttm', 0),
+                data.get('eps_growth', 0)
+            )
+            
+            # Format row data
+            row = {
+                '股票代碼': str(data.get('ticker', '')),
+                '現在股價': self._format_number(data.get('current_price', 0)),
+                '目標殖利率 估價法': self._format_number(target_yield),
+                '相對 P/B 估價法': self._format_number(relative_pb),
+                'PEG 成長股 估價法': self._format_number(peg_valuation),
+                '該公司 股息(TTM)': self._format_number(data.get('dividend_ttm', 0)),
+                '該公司近5年 平均殖利率': self._format_percentage(data.get('yield_5yr_avg', 0)),
+                '該公司 BVPS(TTM)': self._format_number(data.get('bvps_ttm', 0)),
+                '該公司近5年 平均P/B': self._format_number(data.get('pb_5yr_avg', 0)),
+                '該公司 EPS(TTM)': self._format_number(data.get('eps_ttm', 0)),
+                '該公司 EPS成長率％': self._format_percentage(data.get('eps_growth', 0))
             }
-            
-            return pd.DataFrame(data)
-            
-        except Exception as e:
-            print(f"Error generating output: {str(e)}")
-            return pd.DataFrame()
+            formatted_data.append(row)
+        
+        # Create DataFrame with specified column order
+        df = pd.DataFrame(formatted_data, columns=self.columns)
+        return df
 
-    def save_to_csv(self, df, filename=None):
+    def save_to_csv(self, df, output_path=None):
         """
-        Save the analysis to CSV file
+        Save the formatted DataFrame to CSV with datetime in filename
         """
         try:
-            if filename is None:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f'stock_analysis_{timestamp}.csv'
+            # Get current datetime for filename
+            current_datetime = datetime.now().strftime('%Y%m%d_%H%M%S')
             
-            df.to_csv(filename, index=False, encoding='utf-8-sig')
-            print(f"Analysis saved to {filename}")
+            # Create output directory if it doesn't exist
+            os.makedirs('data/output', exist_ok=True)
+            
+            if output_path is None:
+                # Default filename with datetime
+                output_path = f'data/output/result_{current_datetime}.csv'
+            else:
+                # Add datetime to custom filename
+                directory = os.path.dirname(output_path)
+                filename = os.path.basename(output_path)
+                name, ext = os.path.splitext(filename)
+                output_path = os.path.join(directory, f'{name}_{current_datetime}{ext}')
+            
+            # Save with UTF-8-BOM encoding for proper Chinese character display
+            df.to_csv(output_path, index=False, encoding='utf-8-sig')
+            print(f"Analysis saved to {output_path}")
+            return True
             
         except Exception as e:
             print(f"Error saving to CSV: {str(e)}")
+            return False
 
-    def _calculate_target_yield_price(self, data):
-        """Calculate target price based on yield method"""
+    def _calculate_target_yield(self, dividend_ttm, yield_5yr_avg):
+        """Calculate target yield valuation"""
         try:
-            dividend_ttm = data.get('dividend_ttm', 0)
-            yield_5yr_avg = data.get('yield_5yr_avg', 0)
-            if dividend_ttm and yield_5yr_avg:
+            if yield_5yr_avg and yield_5yr_avg != 0:
                 return dividend_ttm / (yield_5yr_avg * 1.2)
             return 0
         except:
             return 0
 
-    def _calculate_relative_pb_price(self, data):
-        """Calculate target price based on P/B method"""
+    def _calculate_relative_pb(self, bvps_ttm, pb_5yr_avg):
+        """Calculate relative P/B valuation"""
         try:
-            bvps_ttm = data.get('bvps_ttm', 0)
-            pb_5yr_avg = data.get('pb_5yr_avg', 0)
-            if bvps_ttm and pb_5yr_avg:
-                return bvps_ttm * pb_5yr_avg
-            return 0
+            return bvps_ttm * pb_5yr_avg
         except:
             return 0
 
-    def _calculate_peg_price(self, data):
-        """Calculate target price based on PEG method"""
+    def _calculate_peg(self, eps_ttm, eps_growth):
+        """Calculate PEG valuation"""
         try:
-            eps_ttm = data.get('eps_ttm', 0)
-            eps_growth = data.get('eps_growth', 0)
-            if eps_ttm and eps_growth:
-                return eps_ttm * eps_growth * 100
-            return 0
+            return eps_ttm * eps_growth * 100
         except:
             return 0
+
+    def _format_number(self, value):
+        """Format numeric values"""
+        try:
+            return f"{float(value):,.2f}"
+        except:
+            return "0.00"
+
+    def _format_percentage(self, value):
+        """Format percentage values"""
+        try:
+            return f"{float(value):,.2f}"
+        except:
+            return "0.00"

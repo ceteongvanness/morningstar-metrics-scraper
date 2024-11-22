@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import argparse
+import time
 from datetime import datetime
 from src.scraper import MorningstarScraper
 from src.utils import ensure_directory_exists

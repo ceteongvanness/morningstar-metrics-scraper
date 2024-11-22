@@ -17,6 +17,24 @@ class MorningstarScraper:
         self.logger = setup_logger()
         self.base_url = "https://www.morningstar.com/stocks"
 
+    def _create_error_dict(self, ticker, error_message):
+        """
+        Create standardized error dictionary
+        """
+        return {
+            'ticker': ticker,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'error': error_message,
+            'dividend_per_share': None,
+            'current_price': None,
+            'pb_ratio': None,
+            'pe_ratio': None,
+            'growth_rate': None,
+            'target_yield_rate': None,
+            'relative_pb': None,
+            'peg_growth': None
+        }
+
     def scrape_stock_data(self, ticker):
         """
         Scrape financial data for a given ticker
@@ -69,11 +87,12 @@ class MorningstarScraper:
         """
         try:
             # Replace these selectors with actual ones from Morningstar
-            dividend = self._safe_extract(soup, 'div.dividend-value')
-            price = self._safe_extract(soup, 'div.price-value')
-            pb_ratio = self._safe_extract(soup, 'div.pb-ratio')
-            pe_ratio = self._safe_extract(soup, 'div.pe-ratio')
-            growth_rate = self._safe_extract(soup, 'div.growth-rate')
+            # You'll need to inspect the Morningstar page to get the correct selectors
+            dividend = self._safe_extract(soup, 'div[data-test="dividend-value"]')
+            price = self._safe_extract(soup, 'div[data-test="price-value"]')
+            pb_ratio = self._safe_extract(soup, 'div[data-test="pb-ratio"]')
+            pe_ratio = self._safe_extract(soup, 'div[data-test="pe-ratio"]')
+            growth_rate = self._safe_extract(soup, 'div[data-test="growth-rate"]')
             
             return {
                 'dividend_per_share': dividend,
@@ -108,15 +127,15 @@ class MorningstarScraper:
         try:
             metrics = {}
             
-            # Target Yield Rate
+            # Target Yield Rate = Dividend Per Share / (Current Price * 1.2)
             if data.get('dividend_per_share') and data.get('current_price'):
                 metrics['target_yield_rate'] = data['dividend_per_share'] / (data['current_price'] * 1.2)
             
-            # Relative P/B
+            # Relative P/B = P/B Ratio * Book Value
             if data.get('pb_ratio') and data.get('book_value'):
                 metrics['relative_pb'] = data['pb_ratio'] * data['book_value']
             
-            # PEG Growth
+            # PEG Growth = (P/E Ratio * Growth Rate) * 100
             if data.get('pe_ratio') and data.get('growth_rate'):
                 metrics['peg_growth'] = data['pe_ratio'] * data['growth_rate'] * 100
             
@@ -125,13 +144,3 @@ class MorningstarScraper:
         except Exception as e:
             self.logger.error(f"Error calculating metrics: {str(e)}")
             return {}
-
-    def _create_error_dict(self, ticker, error_message):
-        """
-        Create standardized error dictionary
-        """
-        return {
-            'ticker': ticker,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'error': error_message
-        }

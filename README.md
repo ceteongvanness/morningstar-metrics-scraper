@@ -35,7 +35,7 @@ brew install python
 
 3. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/stock-analysis-tool.git
+git clone https://github.com/ceteongvanness/stock-analysis-tool.git
 cd stock-analysis-tool
 ```
 
@@ -54,7 +54,7 @@ pip install -r requirements.txt
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/ceteongvanness/morningstar-metrics-scraper.git
+git clone https://github.com/ceteongvanness/stock-analysis-tool.git
 cd stock-analysis-tool
 ```
 

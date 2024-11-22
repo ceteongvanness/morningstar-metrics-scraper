@@ -1,13 +1,13 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables, but don't fail if .env doesn't exist
+load_dotenv(override=True)
 
 # Base configuration
-BASE_URL = "https://www.morningstar.com/stocks"
-DEFAULT_DELAY = 2
-MAX_RETRIES = 3
+BASE_URL = os.getenv('BASE_URL', "https://www.morningstar.com/stocks")
+DEFAULT_DELAY = int(os.getenv('DEFAULT_DELAY', 2))
+MAX_RETRIES = int(os.getenv('MAX_RETRIES', 3))
 
 # Request headers
 HEADERS = {
@@ -23,5 +23,5 @@ OUTPUT_DIR = 'data/output'
 DEFAULT_INPUT_FILE = os.path.join(INPUT_DIR, 'tickers.csv')
 
 # Logging configuration
-LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-LOG_LEVEL = 'INFO'
+LOG_FORMAT = os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

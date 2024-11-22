@@ -17,44 +17,46 @@ class MorningstarScraper:
         self.logger = setup_logger()
         self.base_url = "https://www.morningstar.com/stocks"
 
-    def _create_error_dict(self, ticker, error_message):
-        """
-        Create standardized error dictionary
-        """
-        return {
-            'ticker': ticker,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'error': error_message,
-            'dividend_per_share': None,
-            'current_price': None,
-            'pb_ratio': None,
-            'pe_ratio': None,
-            'growth_rate': None,
-            'target_yield_rate': None,
-            'relative_pb': None,
-            'peg_growth': None
-        }
-
     def scrape_stock_data(self, ticker):
         """
         Scrape financial data for a given ticker
         """
         try:
-            url = f"{self.base_url}/{ticker}/financials"
+            # We'll need to access multiple pages to get all data
+            financials_url = f"{self.base_url}/{ticker}/financials"
+            valuation_url = f"{self.base_url}/{ticker}/valuation"
+            dividends_url = f"{self.base_url}/{ticker}/dividends"
+            
             self.logger.info(f"Scraping data for {ticker}")
             
-            response = self._make_request(url)
-            if not response:
-                return self._create_error_dict(ticker, "Failed to get response")
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Extract basic data
             data = {
                 'ticker': ticker,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                **self._extract_financial_data(soup)
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
+            
+            # Get dividend data (K3: 股息TTM)
+            dividend_data = self._get_dividend_data(dividends_url)
+            data.update(dividend_data)
+            
+            # Get historical yield data (L3: 近5年平均殖利率)
+            yield_data = self._get_historical_yield(dividends_url)
+            data.update(yield_data)
+            
+            # Get BVPS data (M3: BVPS TTM)
+            bvps_data = self._get_bvps_data(financials_url)
+            data.update(bvps_data)
+            
+            # Get historical P/B data (N3: 近5年平均P/B)
+            pb_data = self._get_historical_pb(valuation_url)
+            data.update(pb_data)
+            
+            # Get EPS data (O3: EPS TTM)
+            eps_data = self._get_eps_data(financials_url)
+            data.update(eps_data)
+            
+            # Get EPS growth rate (P3: EPS成長率%)
+            growth_data = self._get_eps_growth(financials_url)
+            data.update(growth_data)
             
             # Calculate metrics
             metrics = self._calculate_metrics(data)
@@ -66,81 +68,144 @@ class MorningstarScraper:
             self.logger.error(f"Error scraping {ticker}: {str(e)}")
             return self._create_error_dict(ticker, str(e))
 
-    def _make_request(self, url):
-        """
-        Make HTTP request with retry logic
-        """
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = requests.get(url, headers=self.headers, timeout=10)
-                if response.status_code == 200:
-                    return response
-                time.sleep(2 ** attempt)  # Exponential backoff
-            except requests.RequestException as e:
-                self.logger.warning(f"Request attempt {attempt + 1} failed: {str(e)}")
-        return None
-
-    def _extract_financial_data(self, soup):
-        """
-        Extract financial data from BeautifulSoup object
-        """
+    def _get_dividend_data(self, url):
+        """Get TTM Dividend (K3)"""
         try:
-            # Replace these selectors with actual ones from Morningstar
-            # You'll need to inspect the Morningstar page to get the correct selectors
-            dividend = self._safe_extract(soup, 'div[data-test="dividend-value"]')
-            price = self._safe_extract(soup, 'div[data-test="price-value"]')
-            pb_ratio = self._safe_extract(soup, 'div[data-test="pb-ratio"]')
-            pe_ratio = self._safe_extract(soup, 'div[data-test="pe-ratio"]')
-            growth_rate = self._safe_extract(soup, 'div[data-test="growth-rate"]')
-            
-            return {
-                'dividend_per_share': dividend,
-                'current_price': price,
-                'pb_ratio': pb_ratio,
-                'pe_ratio': pe_ratio,
-                'growth_rate': growth_rate
-            }
+            response = self._make_request(url)
+            if response:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                dividend = self._safe_extract(soup, 'div[data-test="dividend-ttm"]')
+                return {'dividend_ttm': dividend}
         except Exception as e:
-            self.logger.error(f"Error extracting financial data: {str(e)}")
-            return {}
+            self.logger.error(f"Error getting dividend data: {str(e)}")
+        return {'dividend_ttm': None}
 
-    def _safe_extract(self, soup, selector):
-        """
-        Safely extract and convert value from HTML
-        """
+    def _get_historical_yield(self, url):
+        """Get 5-year Average Yield (L3)"""
         try:
-            element = soup.select_one(selector)
-            if element:
-                value = element.text.strip()
-                # Remove currency symbols and convert to float
-                value = value.replace('$', '').replace(',', '')
-                return float(value)
-        except Exception:
-            return None
-        return None
+            response = self._make_request(url)
+            if response:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                yield_avg = self._safe_extract(soup, 'div[data-test="yield-5year-avg"]')
+                return {'yield_5year_avg': yield_avg}
+        except Exception as e:
+            self.logger.error(f"Error getting yield data: {str(e)}")
+        return {'yield_5year_avg': None}
+
+    def _get_bvps_data(self, url):
+        """Get BVPS TTM (M3)"""
+        try:
+            response = self._make_request(url)
+            if response:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                bvps = self._safe_extract(soup, 'div[data-test="bvps-ttm"]')
+                return {'bvps_ttm': bvps}
+        except Exception as e:
+            self.logger.error(f"Error getting BVPS data: {str(e)}")
+        return {'bvps_ttm': None}
+
+    def _get_historical_pb(self, url):
+        """Get 5-year Average P/B (N3)"""
+        try:
+            response = self._make_request(url)
+            if response:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                pb_avg = self._safe_extract(soup, 'div[data-test="pb-5year-avg"]')
+                return {'pb_5year_avg': pb_avg}
+        except Exception as e:
+            self.logger.error(f"Error getting P/B data: {str(e)}")
+        return {'pb_5year_avg': None}
+
+    def _get_eps_data(self, url):
+        """Get EPS TTM (O3)"""
+        try:
+            response = self._make_request(url)
+            if response:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                eps = self._safe_extract(soup, 'div[data-test="eps-ttm"]')
+                return {'eps_ttm': eps}
+        except Exception as e:
+            self.logger.error(f"Error getting EPS data: {str(e)}")
+        return {'eps_ttm': None}
+
+    def _get_eps_growth(self, url):
+        """Get EPS Growth Rate (P3)"""
+        try:
+            response = self._make_request(url)
+            if response:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                growth = self._safe_extract(soup, 'div[data-test="eps-growth"]')
+                return {'eps_growth': growth}
+        except Exception as e:
+            self.logger.error(f"Error getting EPS growth data: {str(e)}")
+        return {'eps_growth': None}
 
     def _calculate_metrics(self, data):
         """
-        Calculate financial metrics based on extracted data
+        Calculate the three required metrics:
+        1. 目標殖利率 = K3/(L3*1.2)
+        2. 相對 P/B = M3*N3
+        3. PEG 成長股 = O3*P3*100
         """
         try:
             metrics = {}
             
-            # Target Yield Rate = Dividend Per Share / (Current Price * 1.2)
-            if data.get('dividend_per_share') and data.get('current_price'):
-                metrics['target_yield_rate'] = data['dividend_per_share'] / (data['current_price'] * 1.2)
+            # 目標殖利率
+            if data.get('dividend_ttm') and data.get('yield_5year_avg'):
+                metrics['target_yield'] = data['dividend_ttm'] / (data['yield_5year_avg'] * 1.2)
             
-            # Relative P/B = P/B Ratio * Book Value
-            if data.get('pb_ratio') and data.get('book_value'):
-                metrics['relative_pb'] = data['pb_ratio'] * data['book_value']
+            # 相對 P/B
+            if data.get('bvps_ttm') and data.get('pb_5year_avg'):
+                metrics['relative_pb'] = data['bvps_ttm'] * data['pb_5year_avg']
             
-            # PEG Growth = (P/E Ratio * Growth Rate) * 100
-            if data.get('pe_ratio') and data.get('growth_rate'):
-                metrics['peg_growth'] = data['pe_ratio'] * data['growth_rate'] * 100
+            # PEG 成長股
+            if data.get('eps_ttm') and data.get('eps_growth'):
+                metrics['peg_growth'] = data['eps_ttm'] * data['eps_growth'] * 100
             
             return metrics
             
         except Exception as e:
             self.logger.error(f"Error calculating metrics: {str(e)}")
             return {}
+
+    def _make_request(self, url):
+        """Make HTTP request with retry logic"""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, headers=self.headers, timeout=10)
+                if response.status_code == 200:
+                    return response
+                time.sleep(2 ** attempt)
+            except requests.RequestException as e:
+                self.logger.warning(f"Request attempt {attempt + 1} failed: {str(e)}")
+        return None
+
+    def _safe_extract(self, soup, selector):
+        """Safely extract and convert value from HTML"""
+        try:
+            element = soup.select_one(selector)
+            if element:
+                value = element.text.strip()
+                value = value.replace('$', '').replace(',', '').replace('%', '')
+                return float(value)
+        except Exception:
+            return None
+        return None
+
+    def _create_error_dict(self, ticker, error_message):
+        """Create standardized error dictionary"""
+        return {
+            'ticker': ticker,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'error': error_message,
+            'dividend_ttm': None,           # K3
+            'yield_5year_avg': None,        # L3
+            'bvps_ttm': None,              # M3
+            'pb_5year_avg': None,          # N3
+            'eps_ttm': None,               # O3
+            'eps_growth': None,            # P3
+            'target_yield': None,          # K3/(L3*1.2)
+            'relative_pb': None,           # M3*N3
+            'peg_growth': None             # O3*P3*100
+        }

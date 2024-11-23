@@ -1,8 +1,10 @@
+import os
 import pandas as pd
 from datetime import datetime
 from typing import List, Dict, Any
 from ..utils.logger import setup_logger
-from ..constants.config import COLUMNS, OUTPUT_DIR, CSV_ENCODING, DATE_FORMAT
+from ..utils.helpers import format_output_path, get_timestamp_filename
+from ..constants.config import COLUMNS, CSV_ENCODING
 
 class CSVFormatter:
     def __init__(self):
@@ -15,7 +17,7 @@ class CSVFormatter:
         
         for data in data_list:
             row = {
-                COLUMNS['TICKER']: data.get('ticker', ''),
+                COLUMNS['TICKER']: str(data.get('ticker', '')),
                 COLUMNS['CURRENT_PRICE']: self._format_number(data.get('current_price', 0)),
                 COLUMNS['TARGET_YIELD']: self._calculate_target_yield(
                     data.get('dividend_ttm', 0),
@@ -44,9 +46,14 @@ class CSVFormatter:
         """Save DataFrame to CSV with timestamp"""
         try:
             if output_path is None:
-                timestamp = datetime.now().strftime(DATE_FORMAT)
-                output_path = OUTPUT_DIR / f'stock_analysis_{timestamp}.csv'
+                output_path = format_output_path()
+            else:
+                directory = os.path.dirname(output_path)
+                filename = os.path.basename(output_path)
+                name, ext = os.path.splitext(filename)
+                output_path = os.path.join(directory, get_timestamp_filename(name))
             
+            # Save with UTF-8-BOM encoding for proper Chinese character display
             df.to_csv(output_path, index=False, encoding=CSV_ENCODING)
             self.logger.info(f"Data saved to {output_path}")
             

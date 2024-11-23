@@ -1,146 +1,55 @@
 import requests
-from bs4 import BeautifulSoup
 import time
-from datetime import datetime
-import pandas as pd
-import os
-from .logger import setup_logger
+from bs4 import BeautifulSoup
+from typing import Optional, Dict, Any
+from ..utils.logger import setup_logger
+from ..constants.config import HEADERS, REQUEST_TIMEOUT, REQUEST_DELAY, MAX_RETRIES
 
-class MorningstarScraper:
+class BaseScraper:
     def __init__(self):
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Connection': 'keep-alive',
-        }
-        self.logger = setup_logger()
-        self.base_url = "https://www.morningstar.com/stocks"
+        self.logger = setup_logger('base_scraper')
+        self.headers = HEADERS
+        self.timeout = REQUEST_TIMEOUT
+        self.delay = REQUEST_DELAY
+        self.max_retries = MAX_RETRIES
 
-    def _create_error_dict(self, ticker, error_message):
-        """
-        Create standardized error dictionary
-        """
-        return {
-            'ticker': ticker,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'error': error_message,
-            'dividend_per_share': None,
-            'current_price': None,
-            'pb_ratio': None,
-            'pe_ratio': None,
-            'growth_rate': None,
-            'target_yield_rate': None,
-            'relative_pb': None,
-            'peg_growth': None
-        }
-
-    def scrape_stock_data(self, ticker):
-        """
-        Scrape financial data for a given ticker
-        """
-        try:
-            url = f"{self.base_url}/{ticker}/financials"
-            self.logger.info(f"Scraping data for {ticker}")
-            
-            response = self._make_request(url)
-            if not response:
-                return self._create_error_dict(ticker, "Failed to get response")
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Extract basic data
-            data = {
-                'ticker': ticker,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                **self._extract_financial_data(soup)
-            }
-            
-            # Calculate metrics
-            metrics = self._calculate_metrics(data)
-            data.update(metrics)
-            
-            return data
-            
-        except Exception as e:
-            self.logger.error(f"Error scraping {ticker}: {str(e)}")
-            return self._create_error_dict(ticker, str(e))
-
-    def _make_request(self, url):
-        """
-        Make HTTP request with retry logic
-        """
-        max_retries = 3
-        for attempt in range(max_retries):
+    def _make_request(self, url: str) -> Optional[requests.Response]:
+        """Make HTTP request with retry logic"""
+        for attempt in range(self.max_retries):
             try:
-                response = requests.get(url, headers=self.headers, timeout=10)
+                response = requests.get(url, headers=self.headers, timeout=self.timeout)
                 if response.status_code == 200:
+                    time.sleep(self.delay)  # Rate limiting
                     return response
-                time.sleep(2 ** attempt)  # Exponential backoff
+                self.logger.warning(f"Request failed with status {response.status_code}")
             except requests.RequestException as e:
-                self.logger.warning(f"Request attempt {attempt + 1} failed: {str(e)}")
+                self.logger.error(f"Request attempt {attempt + 1} failed: {str(e)}")
+                time.sleep(2 ** attempt)  # Exponential backoff
         return None
 
-    def _extract_financial_data(self, soup):
-        """
-        Extract financial data from BeautifulSoup object
-        """
-        try:
-            # Replace these selectors with actual ones from Morningstar
-            # You'll need to inspect the Morningstar page to get the correct selectors
-            dividend = self._safe_extract(soup, 'div[data-test="dividend-value"]')
-            price = self._safe_extract(soup, 'div[data-test="price-value"]')
-            pb_ratio = self._safe_extract(soup, 'div[data-test="pb-ratio"]')
-            pe_ratio = self._safe_extract(soup, 'div[data-test="pe-ratio"]')
-            growth_rate = self._safe_extract(soup, 'div[data-test="growth-rate"]')
-            
-            return {
-                'dividend_per_share': dividend,
-                'current_price': price,
-                'pb_ratio': pb_ratio,
-                'pe_ratio': pe_ratio,
-                'growth_rate': growth_rate
-            }
-        except Exception as e:
-            self.logger.error(f"Error extracting financial data: {str(e)}")
-            return {}
-
-    def _safe_extract(self, soup, selector):
-        """
-        Safely extract and convert value from HTML
-        """
+    def _safe_extract(self, soup: BeautifulSoup, selector: str) -> Optional[str]:
+        """Safely extract text from HTML using selector"""
         try:
             element = soup.select_one(selector)
-            if element:
-                value = element.text.strip()
-                # Remove currency symbols and convert to float
-                value = value.replace('$', '').replace(',', '')
-                return float(value)
-        except Exception:
-            return None
-        return None
-
-    def _calculate_metrics(self, data):
-        """
-        Calculate financial metrics based on extracted data
-        """
-        try:
-            metrics = {}
-            
-            # Target Yield Rate = Dividend Per Share / (Current Price * 1.2)
-            if data.get('dividend_per_share') and data.get('current_price'):
-                metrics['target_yield_rate'] = data['dividend_per_share'] / (data['current_price'] * 1.2)
-            
-            # Relative P/B = P/B Ratio * Book Value
-            if data.get('pb_ratio') and data.get('book_value'):
-                metrics['relative_pb'] = data['pb_ratio'] * data['book_value']
-            
-            # PEG Growth = (P/E Ratio * Growth Rate) * 100
-            if data.get('pe_ratio') and data.get('growth_rate'):
-                metrics['peg_growth'] = data['pe_ratio'] * data['growth_rate'] * 100
-            
-            return metrics
-            
+            return element.text.strip() if element else None
         except Exception as e:
-            self.logger.error(f"Error calculating metrics: {str(e)}")
-            return {}
+            self.logger.error(f"Error extracting element with selector {selector}: {str(e)}")
+            return None
+
+    def _clean_numeric(self, value: Optional[str]) -> float:
+        """Clean and convert numeric string to float"""
+        try:
+            if value is None:
+                return 0.0
+            cleaned = value.replace('$', '').replace(',', '').replace('%', '')
+            return float(cleaned)
+        except (ValueError, AttributeError):
+            return 0.0
+
+    def _create_default_data(self, identifier: str) -> Dict[str, Any]:
+        """Create default data structure"""
+        return {
+            'identifier': identifier,
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'error': None
+        }

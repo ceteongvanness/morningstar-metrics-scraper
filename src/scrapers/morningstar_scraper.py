@@ -1,27 +1,28 @@
-from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from bs4 import BeautifulSoup
+from datetime import datetime
 from .base_scraper import BaseScraper
-from ..constants.selectors import SELECTORS, PAGE_URLS
+from ..constants.config import BASE_URL
+from ..constants.selectors import SELECTORS
 
 class MorningstarScraper(BaseScraper):
     def __init__(self):
         super().__init__()
-        self.base_url = "https://www.morningstar.com/stocks"
+        self.logger = self.logger.getChild('morningstar')
 
     def scrape_stock_data(self, ticker: str) -> Dict[str, Any]:
-        """Scrape financial metrics from Morningstar"""
+        """Scrape stock data from all relevant pages"""
         try:
             data = self._create_default_data(ticker)
             
-            # Scrape from different pages
+            # Define page URLs
             pages = {
-                'dividends': f"{self.base_url}/{ticker}/dividends",
-                'valuation': f"{self.base_url}/{ticker}/valuation",
-                'financials': f"{self.base_url}/{ticker}/financials"
+                'dividends': f"{BASE_URL}/{ticker}/dividends",
+                'valuation': f"{BASE_URL}/{ticker}/valuation",
+                'financials': f"{BASE_URL}/{ticker}/financials"
             }
             
-            # Get data from each page
+            # Scrape each page
             dividend_data = self._scrape_dividends_page(pages['dividends'])
             valuation_data = self._scrape_valuation_page(pages['valuation'])
             financial_data = self._scrape_financials_page(pages['financials'])
@@ -38,18 +39,21 @@ class MorningstarScraper(BaseScraper):
             return self._create_error_data(ticker, str(e))
 
     def _scrape_dividends_page(self, url: str) -> Dict[str, Any]:
-        """Scrape dividend related metrics"""
+        """Scrape dividend metrics"""
         try:
             response = self._make_request(url)
             if not response:
                 return {}
                 
             soup = BeautifulSoup(response.text, 'html.parser')
-            selectors = SELECTORS['dividends']
             
             return {
-                'dividend_ttm': self._clean_numeric(self._safe_extract(soup, selectors['dividend_ttm'])),
-                'yield_5yr_avg': self._clean_numeric(self._safe_extract(soup, selectors['yield_5yr_avg']))
+                'dividend_ttm': self._clean_numeric(
+                    self._safe_extract(soup, SELECTORS['dividends']['dividend_ttm'])
+                ),
+                'yield_5yr_avg': self._clean_numeric(
+                    self._safe_extract(soup, SELECTORS['dividends']['yield_5yr_avg'])
+                )
             }
         except Exception as e:
             self.logger.error(f"Error scraping dividends: {str(e)}")
@@ -63,11 +67,14 @@ class MorningstarScraper(BaseScraper):
                 return {}
                 
             soup = BeautifulSoup(response.text, 'html.parser')
-            selectors = SELECTORS['valuation']
             
             return {
-                'bvps_ttm': self._clean_numeric(self._safe_extract(soup, selectors['bvps_ttm'])),
-                'pb_5yr_avg': self._clean_numeric(self._safe_extract(soup, selectors['pb_5yr_avg']))
+                'bvps_ttm': self._clean_numeric(
+                    self._safe_extract(soup, SELECTORS['valuation']['bvps_ttm'])
+                ),
+                'pb_5yr_avg': self._clean_numeric(
+                    self._safe_extract(soup, SELECTORS['valuation']['pb_5yr_avg'])
+                )
             }
         except Exception as e:
             self.logger.error(f"Error scraping valuation: {str(e)}")
@@ -81,18 +88,21 @@ class MorningstarScraper(BaseScraper):
                 return {}
                 
             soup = BeautifulSoup(response.text, 'html.parser')
-            selectors = SELECTORS['financials']
             
             return {
-                'eps_ttm': self._clean_numeric(self._safe_extract(soup, selectors['eps_ttm'])),
-                'eps_growth': self._clean_numeric(self._safe_extract(soup, selectors['eps_growth']))
+                'eps_ttm': self._clean_numeric(
+                    self._safe_extract(soup, SELECTORS['financials']['eps_ttm'])
+                ),
+                'eps_growth': self._clean_numeric(
+                    self._safe_extract(soup, SELECTORS['financials']['eps_growth'])
+                )
             }
         except Exception as e:
             self.logger.error(f"Error scraping financials: {str(e)}")
             return {}
 
     def _create_error_data(self, ticker: str, error: str) -> Dict[str, Any]:
-        """Create error data structure"""
+        """Create data structure for error case"""
         return {
             'ticker': ticker,
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),

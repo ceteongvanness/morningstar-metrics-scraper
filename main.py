@@ -1,109 +1,54 @@
-import pandas as pd
-import os
 import argparse
-import time
-from datetime import datetime
-from src.scraper import MorningstarScraper
-from src.utils import ensure_directory_exists
+from src.scrapers.morningstar_scraper import MorningstarScraper
+from src.formatters.csv_formatter import CSVFormatter
+from src.utils.helpers import load_tickers, ensure_dir_exists
+from src.utils.logger import setup_logger
+from src.constants.config import INPUT_DIR, OUTPUT_DIR, LOGS_DIR
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Morningstar Data Scraper')
+    parser = argparse.ArgumentParser(description='Morningstar Stock Analysis Tool')
     parser.add_argument('--input', 
-                      default='data/input/tickers.csv',
-                      help='Path to input CSV file')
+                      default=str(INPUT_DIR / 'tickers.csv'),
+                      help='Path to input CSV file with tickers')
     parser.add_argument('--output',
                       help='Path to output CSV file (optional)')
-    parser.add_argument('--delay',
-                      type=int,
-                      default=2,
-                      help='Delay between requests in seconds')
     return parser.parse_args()
 
-def load_tickers(filepath):
-    """
-    Load tickers from CSV file
-    """
-    try:
-        df = pd.read_csv(filepath)
-        return df['Ticker'].tolist()
-    except Exception as e:
-        raise Exception(f"Error loading tickers: {str(e)}")
-
-def save_results(results, output_path=None):
-    """
-    Save results to CSV file
-    """
-    if not output_path:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_path = f'data/output/financial_metrics_{timestamp}.csv'
-    
-    # Ensure output directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    
-    # Convert to DataFrame
-    df = pd.DataFrame(results)
-    
-    # Define column order
-    columns = [
-        'ticker',
-        'timestamp',
-        'dividend_per_share',
-        'current_price',
-        'pb_ratio',
-        'pe_ratio',
-        'growth_rate',
-        'target_yield_rate',
-        'relative_pb',
-        'peg_growth',
-        'error'
-    ]
-    
-    # Only include columns that exist
-    existing_columns = [col for col in columns if col in df.columns]
-    df = df[existing_columns]
-    
-    # Save to CSV
-    df.to_csv(output_path, index=False)
-    print(f"Results saved to {output_path}")
-
 def main():
-    # Parse command line arguments
+    # Set up logging
+    logger = setup_logger('main')
+    
+    # Parse arguments
     args = parse_arguments()
     
-    # Ensure directories exist
-    ensure_directory_exists('data/input')
-    ensure_directory_exists('data/output')
-    
     try:
+        # Ensure directories exist
+        ensure_dir_exists(INPUT_DIR)
+        ensure_dir_exists(OUTPUT_DIR)
+        ensure_dir_exists(LOGS_DIR)
+        
         # Load tickers
         tickers = load_tickers(args.input)
-        print(f"Loaded {len(tickers)} tickers")
+        logger.info(f"Loaded {len(tickers)} tickers")
         
-        # Initialize scraper
+        # Initialize components
         scraper = MorningstarScraper()
+        formatter = CSVFormatter()
         results = []
         
         # Process each ticker
         for i, ticker in enumerate(tickers, 1):
-            print(f"Processing {ticker} ({i}/{len(tickers)})")
-            
-            # Scrape data
+            logger.info(f"Processing {ticker} ({i}/{len(tickers)})")
             data = scraper.scrape_stock_data(ticker)
             results.append(data)
-            
-            # Save progress periodically
-            if i % 10 == 0:
-                save_results(results, args.output)
-            
-            # Delay between requests
-            if i < len(tickers):  # Don't delay after last ticker
-                time.sleep(args.delay)
         
-        # Save final results
-        save_results(results, args.output)
+        # Format and save results
+        df = formatter.format_data(results)
+        formatter.save_to_csv(df, args.output)
+        logger.info("Analysis completed successfully")
         
     except Exception as e:
-        print(f"Error: {str(e)}")
+        logger.error(f"Error: {str(e)}")
         return 1
     
     return 0

@@ -11,6 +11,30 @@ class CSVFormatter:
         self.logger = setup_logger('csv_formatter')
         self.columns = list(COLUMNS.values())
 
+    def read_input_csv(self, input_path: str) -> List[str]:
+        """Read tickers from input CSV file"""
+        try:
+            df = pd.read_csv(input_path, encoding=CSV_ENCODING)
+            # Debug print
+            print("Available columns in CSV:", df.columns.tolist())
+            
+            # Get the ticker column name from COLUMNS config
+            ticker_column = COLUMNS.get('TICKER')
+            print("Looking for column:", ticker_column)
+            
+            if ticker_column not in df.columns:
+                self.logger.error(f"Column {ticker_column} not found in CSV")
+                return []
+            
+            # Get unique tickers and remove any empty/null values
+            tickers = df[ticker_column].dropna().unique().tolist()
+            self.logger.info(f"Found {len(tickers)} unique tickers in {input_path}")
+            return tickers
+            
+        except Exception as e:
+            self.logger.error(f"Error reading input CSV: {str(e)}")
+            return []
+
     def format_data(self, data_list: List[Dict[str, Any]]) -> pd.DataFrame:
         """Format scraped data into DataFrame"""
         formatted_data = []
@@ -18,6 +42,8 @@ class CSVFormatter:
         for data in data_list:
             row = {
                 COLUMNS['TICKER']: str(data.get('ticker', '')),
+                COLUMNS['SECTOR']: str(data.get('sector', '')),
+                COLUMNS['INDUSTRY']: str(data.get('industry', '')),
                 COLUMNS['CURRENT_PRICE']: self._format_number(data.get('current_price', 0)),
                 COLUMNS['TARGET_YIELD']: self._calculate_target_yield(
                     data.get('dividend_ttm', 0),

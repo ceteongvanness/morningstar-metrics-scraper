@@ -1,4 +1,6 @@
-from typing import Dict, Any
+# src/scrapers/combined_scraper.py
+import time
+from typing import Dict, Any, Optional
 from datetime import datetime
 from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
@@ -19,6 +21,8 @@ class CombinedScraper(BaseScraper):
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
             
+            print(f"\nScraping data for {ticker}...")
+            
             # Morningstar URLs
             ms_pages = {
                 'quote': f"{MORNINGSTAR_URL}/stocks/{ticker}/quote",
@@ -27,12 +31,12 @@ class CombinedScraper(BaseScraper):
                 'financials': f"{MORNINGSTAR_URL}/stocks/{ticker}/financials"
             }
             
-            # Finviz URL
-            fv_url = f"{FINVIZ_URL}/quote.ashx?t={ticker}"
-            
             # Scrape Morningstar data
             ms_data = self._scrape_morningstar(ms_pages)
             data.update(ms_data)
+            
+            # Finviz URL
+            fv_url = f"{FINVIZ_URL}/quote.ashx?t={ticker}"
             
             # Scrape Finviz data
             fv_data = self._scrape_finviz(fv_url)
@@ -53,17 +57,18 @@ class CombinedScraper(BaseScraper):
             quote_data = self._scrape_ms_quote(urls['quote'])
             data.update(quote_data)
             
+            # Add delay between requests
+            time.sleep(2)
+            
             # Get dividend data
             dividend_data = self._scrape_ms_dividends(urls['dividends'])
             data.update(dividend_data)
             
+            time.sleep(2)
+            
             # Get valuation data
             valuation_data = self._scrape_ms_valuation(urls['valuation'])
             data.update(valuation_data)
-            
-            # Get financial data
-            financial_data = self._scrape_ms_financials(urls['financials'])
-            data.update(financial_data)
             
             return data
             
@@ -92,29 +97,10 @@ class CombinedScraper(BaseScraper):
                             label = cells[i].text.strip()
                             value = cells[i + 1].text.strip()
                             
-                            # Map Finviz fields to our data structure
                             if label == 'Sector':
                                 data['sector'] = value
                             elif label == 'Industry':
                                 data['industry'] = value
-                            elif label == 'P/E':
-                                data['finviz_pe'] = self._clean_numeric(value)
-                            elif label == 'Forward P/E':
-                                data['finviz_forward_pe'] = self._clean_numeric(value)
-                            elif label == 'PEG':
-                                data['finviz_peg'] = self._clean_numeric(value)
-                            elif label == 'P/B':
-                                data['finviz_pb'] = self._clean_numeric(value)
-                            elif label == 'Dividend':
-                                data['finviz_dividend'] = self._clean_numeric(value)
-                            elif label == 'ROE':
-                                data['finviz_roe'] = self._clean_numeric(value)
-                            elif label == 'ROA':
-                                data['finviz_roa'] = self._clean_numeric(value)
-                            elif label == 'EPS (ttm)':
-                                data['finviz_eps'] = self._clean_numeric(value)
-                            elif label == 'Beta':
-                                data['finviz_beta'] = self._clean_numeric(value)
             
             return data
             
@@ -141,18 +127,13 @@ class CombinedScraper(BaseScraper):
 
     def _scrape_ms_dividends(self, url: str) -> Dict[str, Any]:
         """Scrape dividend data from Morningstar"""
-        # Implementation similar to current MorningstarScraper
-        pass
+        # Add implementation
+        return {}
 
     def _scrape_ms_valuation(self, url: str) -> Dict[str, Any]:
         """Scrape valuation data from Morningstar"""
-        # Implementation similar to current MorningstarScraper
-        pass
-
-    def _scrape_ms_financials(self, url: str) -> Dict[str, Any]:
-        """Scrape financial data from Morningstar"""
-        # Implementation similar to current MorningstarScraper
-        pass
+        # Add implementation
+        return {}
 
     def _create_error_data(self, ticker: str, error: str) -> Dict[str, Any]:
         """Create data structure for error cases"""
@@ -160,22 +141,13 @@ class CombinedScraper(BaseScraper):
             'ticker': ticker,
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'error': error,
-            'sector': 'Unknown',
-            'industry': 'Unknown',
+            'sector': '',
+            'industry': '',
             'current_price': 0.0,
             'dividend_ttm': 0.0,
             'yield_5yr_avg': 0.0,
             'bvps_ttm': 0.0,
             'pb_5yr_avg': 0.0,
             'eps_ttm': 0.0,
-            'eps_growth': 0.0,
-            'finviz_pe': 0.0,
-            'finviz_forward_pe': 0.0,
-            'finviz_peg': 0.0,
-            'finviz_pb': 0.0,
-            'finviz_dividend': 0.0,
-            'finviz_roe': 0.0,
-            'finviz_roa': 0.0,
-            'finviz_eps': 0.0,
-            'finviz_beta': 0.0
+            'eps_growth': 0.0
         }
